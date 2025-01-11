@@ -5,9 +5,10 @@ import pandas as pd
 import piexif
 import os
 
+# Set logging level to WARNING by default to reduce verbosity
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
+    level=logging.WARNING,  # Default level set to WARNING
 )
 
 
@@ -66,17 +67,10 @@ def _add_exif(image_path: str, tags):
 def _parse_shutter(shutter_value):
     try:
         shutter_value = (
-            shutter_value.replace("¹⁄", "1/")
-            .replace("₁", "1")
-            .replace("₂", "2")
-            .replace("₃", "3")
-            .replace("₄", "4")
-            .replace("₅", "5")
-            .replace("₆", "6")
-            .replace("₇", "7")
-            .replace("₈", "8")
-            .replace("₉", "9")
-            .replace("₀", "0")
+            shutter_value.replace("¹⁄", "1/").replace("₁", "1").replace("₂", "2")
+            .replace("₃", "3").replace("₄", "4").replace("₅", "5")
+            .replace("₆", "6").replace("₇", "7").replace("₈", "8")
+            .replace("₉", "9").replace("₀", "0")
         )
         numerator, denominator = map(int, shutter_value.split("/"))
         return numerator, denominator
@@ -95,18 +89,30 @@ def _convert_to_dms(value):
 def _extract_parameters_from_path(folder_path):
     try:
         parts = folder_path.strip(os.sep).split(os.sep)
+        logging.debug(f"Extracted parts: {parts}")
         film_stock = parts[-2]
         location_season = parts[-1]
         location, season_year = location_season.split(" - ")
         return film_stock, location, season_year
-    except ValueError:
-        raise ValueError(
-            f"Invalid folder structure: {folder_path}. Expected format: 'FilmStock/Location - Season Year'."
-        )
+    except ValueError as e:
+        logging.error(f"Error extracting parameters from path: {folder_path}")
+        raise e
 
 
 def main(image_folder_path: str, image_info_path: str, *, reverse: bool = False):
+    """
+    Add EXIF metadata to scanned film photos and rename files.
+
+    :param image_folder_path: Path to the folder containing image files.
+    :param image_info_path: Path to the CSV file containing image metadata.
+    :param reverse: Process images in descending order of filenames (optional flag).
+    """
     try:
+        # Convert relative paths to absolute paths
+        image_folder_path = os.path.abspath(image_folder_path)
+        image_info_path = os.path.abspath(image_info_path)
+        
+        logging.info(f"Reverse mode: {reverse}")
         film_stock, location, season_year = _extract_parameters_from_path(image_folder_path)
 
         info = pd.read_csv(image_info_path)
@@ -117,35 +123,40 @@ def main(image_folder_path: str, image_info_path: str, *, reverse: bool = False)
             raise ValueError(f"CSV must contain the columns: {required_columns}")
 
         image_paths = sorted(glob(f"{image_folder_path}/*.jpg"), reverse=reverse)
-        if len(image_paths) == 0:
-            logging.warning("No image files found in the specified folder.")
-            return
-
         logging.info(f"Found {len(image_paths)} images in the folder.")
+
+        # Handle mismatch of image count and metadata count
+        min_count = min(len(image_paths), len(info))
+        logging.info(f"Processing {min_count} images and metadata rows.")
+        
+        # If more images than metadata, log the discrepancy
+        if len(image_paths) > len(info):
+            logging.warning(f"There are {len(image_paths) - len(info)} more images than metadata, skipping extra images.")
 
         renamed_files = []
         exif_success = []
 
         for idx, image_path in enumerate(image_paths, start=1):
+            logging.debug(f"Processing image {idx}: {image_path}")
+
             roll_number = f"R01"
             frame_number = f"F{idx:02d}"
 
+            # Rename the image
             new_path = _rename_scan(
                 image_path, film_stock, location, season_year, roll_number, frame_number
             )
             renamed_files.append(new_path)
 
+            # Add EXIF metadata only if metadata exists
             if idx <= len(info):
-                image_info = info.iloc[idx - 1]
+                image_info = info.iloc[idx - 1]  # We ensure that we only access up to `min_count` indices
+                logging.debug(f"Metadata for image {idx}: {image_info}")
                 _add_exif(new_path, image_info)
                 exif_success.append(new_path)
 
         logging.info(f"Renamed {len(renamed_files)} images.")
         logging.info(f"Successfully added/updated EXIF metadata for {len(exif_success)} images.")
-        if len(renamed_files) != len(image_paths):
-            logging.warning(f"{len(image_paths) - len(renamed_files)} images were not renamed!")
-        if len(exif_success) < len(renamed_files):
-            logging.warning(f"{len(renamed_files) - len(exif_success)} images do not have EXIF metadata.")
 
     except Exception as e:
         logging.error(f"Error in main: {e}")
