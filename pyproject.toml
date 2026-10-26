@@ -1,0 +1,33 @@
+[project]
+name = "faramir"
+version = "0.1.0"
+description = "Add EXIF metadata from an Émulsion CSV to scanned film photos, and rename them"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "clize",
+    "pandas",
+    "piexif",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit",
+    "pytest",
+    "ruff",
+]
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-config", "--strict-markers"]
+xfail_strict = true
+log_level = "INFO"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

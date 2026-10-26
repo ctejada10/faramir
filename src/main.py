@@ -1,9 +1,10 @@
 import logging
+import os
 from datetime import datetime
 from glob import glob
+
 import pandas as pd
 import piexif
-import os
 
 # Set logging level to WARNING by default to reduce verbosity
 logging.basicConfig(
@@ -67,10 +68,17 @@ def _add_exif(image_path: str, tags):
 def _parse_shutter(shutter_value):
     try:
         shutter_value = (
-            shutter_value.replace("¹⁄", "1/").replace("₁", "1").replace("₂", "2")
-            .replace("₃", "3").replace("₄", "4").replace("₅", "5")
-            .replace("₆", "6").replace("₇", "7").replace("₈", "8")
-            .replace("₉", "9").replace("₀", "0")
+            shutter_value.replace("¹⁄", "1/")
+            .replace("₁", "1")
+            .replace("₂", "2")
+            .replace("₃", "3")
+            .replace("₄", "4")
+            .replace("₅", "5")
+            .replace("₆", "6")
+            .replace("₇", "7")
+            .replace("₈", "8")
+            .replace("₉", "9")
+            .replace("₀", "0")
         )
         numerator, denominator = map(int, shutter_value.split("/"))
         return numerator, denominator
@@ -111,7 +119,7 @@ def main(image_folder_path: str, image_info_path: str, *, reverse: bool = False)
         # Convert relative paths to absolute paths
         image_folder_path = os.path.abspath(image_folder_path)
         image_info_path = os.path.abspath(image_info_path)
-        
+
         logging.info(f"Reverse mode: {reverse}")
         film_stock, location, season_year = _extract_parameters_from_path(image_folder_path)
 
@@ -128,10 +136,12 @@ def main(image_folder_path: str, image_info_path: str, *, reverse: bool = False)
         # Handle mismatch of image count and metadata count
         min_count = min(len(image_paths), len(info))
         logging.info(f"Processing {min_count} images and metadata rows.")
-        
+
         # If more images than metadata, log the discrepancy
         if len(image_paths) > len(info):
-            logging.warning(f"There are {len(image_paths) - len(info)} more images than metadata, skipping extra images.")
+            logging.warning(
+                f"There are {len(image_paths) - len(info)} more images than metadata, skipping extra images."
+            )
 
         renamed_files = []
         exif_success = []
@@ -139,13 +149,11 @@ def main(image_folder_path: str, image_info_path: str, *, reverse: bool = False)
         for idx, image_path in enumerate(image_paths, start=1):
             logging.debug(f"Processing image {idx}: {image_path}")
 
-            roll_number = f"R01"
+            roll_number = "R01"
             frame_number = f"F{idx:02d}"
 
             # Rename the image
-            new_path = _rename_scan(
-                image_path, film_stock, location, season_year, roll_number, frame_number
-            )
+            new_path = _rename_scan(image_path, film_stock, location, season_year, roll_number, frame_number)
             renamed_files.append(new_path)
 
             # Add EXIF metadata only if metadata exists
@@ -160,3 +168,4 @@ def main(image_folder_path: str, image_info_path: str, *, reverse: bool = False)
 
     except Exception as e:
         logging.error(f"Error in main: {e}")
+        raise
